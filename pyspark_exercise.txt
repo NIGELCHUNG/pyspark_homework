@@ -1,0 +1,178 @@
+# http://discuss.itversity.com/c/certifications/spark-exercises
+
+# exercise 1
+
+ssh nzguy990@gw01.itversity.com
+gahg8voo`keeK8hah6ooHi0ong6naiGh
+
+hadoop fs -ls /public/crime/csv /user/nzguy990
+
+hadoop fs -ls -h /public/crime/csv
+# /public/crime/csv/crime_data.csv
+
+
+pyspark --master yarn --conf spark.ui.port=12562 \
+--executor-memory 2G \
+--num-executors 1
+
+crimeDataRDD = sc.textFile("/public/crime/csv/crime_data.csv")
+
+for i in crimeDataRDD.take(3): print(i)
+#
+# ID,Case Number,Date,Block,IUCR,Primary Type,Description,Location Description,Arrest,Domestic,Beat,District,Ward,Community Area,FBI Code,X Coordinate,Y Coordinate,Year,Updated On,Latitude,Longitude,Location
+# 5679862,HN487108,07/24/2007 10:11:00 PM,054XX S ABERDEEN ST,1320,CRIMINAL DAMAGE,TO VEHICLE,STREET,false,false,0934,009,16,61,14,1169912,1868555,2007,04/15/2016 08:55:02 AM,41.794811309,-87.652466989,"(41.794811309, -87.652466989)"
+
+header = crimeDataRDD.first();
+crimeDataWOHeaderRDD=crimeDataRDD.filter(lambda r:r !=header)
+
+for i in crimeDataWOHeaderRDD.take(3): print(i)
+#
+# 5679862,HN487108,07/24/2007 10:11:00 PM,054XX S ABERDEEN ST,1320,CRIMINAL DAMAGE,TO VEHICLE,STREET,false,false,0934,009,16,61,14,1169912,1868555,2007,04/15/2016 08:55:02 AM,41.794811309,-87.652466989,"(41.794811309, -87.652466989)"
+# 5679863,HN488302,07/24/2007 01:00:00 PM,082XX S TALMAN AVE,0460,BATTERY,SIMPLE,STREET,false,false,0835,008,18,70,08B,1160134,1850078,2007,04/15/2016 08:55:02 AM,41.744314668,-87.688830696,"(41.744314668, -87.688830696)"
+
+def getDate(record):
+    timestamp = record.split(",")[2]
+    date = timestamp.split(" ")[0]
+    ccyy = date.split("/")[2]
+    mm = date.split("/")[0]
+    ccyymm = int(ccyy+mm)
+    return ccyymm
+
+from pyspark.sql import Row
+
+crimeDataDF = crimeDataWOHeaderRDD.\
+map(lambda rec: Row(yyyymm=getDate(rec), crimeType=rec.split(",")[5])).\
+toDF()
+
+for i in crimeDataDF.take(3): print(i)
+#
+# (200707, u'CRIMINAL DAMAGE')
+# (200707, u'BATTERY')
+# (200707, u'BATTERY')
+
+crimeDataDF.registerTempTable("crimeResults")
+crimeDataDF=sqlContext.sql("select yyyymm, count(1) crimeCount, crimeType  \
+from crimeResults \
+group by yyyymm, crimeType \
+order by yyyymm, crimeCount desc")
+
+for i in crimeDataDF.take(10000): print(i)
+
+crimeDataDFToRDD = \
+crimeDataDF.rdd.map(lambda row: str(row[0]) +("\t") + str(row[1]) +("\t") + row[2])\
+.coalesce(1).saveAsTextFile(path = "/user/nzguy990/solutions/solution01/crimes_by_type_by_month" , \
+compressionCodecClass="org.apache.hadoop.io.compress.GzipCodec")
+
+exit()
+
+# not compressed
+crimeDataDFToRDD = \
+crimeDataDF.rdd.map(lambda row: str(row[0]) +("\t") + str(row[1]) +("\t") + row[2])\
+.coalesce(1).saveAsTextFile(path = "/user/nzguy990/solutions/solution01/crimes_by_type_by_month")
+
+
+# bash console - see data
+hadoop fs -ls /user/nzguy990/solutions/solution01/crimes_by_type_by_month
+hadoop fs -cat /user/nzguy990/solutions/solution01/crimes_by_type_by_month/part-00000
+
+
+# exercise 2
+# http://discuss.itversity.com/t/exercise-02-get-details-of-inactive-customers/7848
+
+ordersRDD = sc.textFile("/user/nzguy990/retail_db/orders")
+
+from pyspark.sql import Row
+
+ordersDF = ordersRDD.\
+map(lambda rec: Row(order_id=int(rec.split(",")[0]),order_customer_id=int(rec.split(",")[2]))).toDF()
+
+for i in ordersDF.take(10): print(i)
+
+ordersDF.registerTempTable("orders")
+
+customersRDD = sc.textFile("/user/nzguy990/retail_db/customers")
+
+customersDF = customersRDD.\
+map(lambda rec: Row(customer_id=int(rec.split(",")[0]), customer_fname=rec.split(",")[1], customer_lname=rec.split(",")[2])).toDF()
+
+for i in customersDF.take(10): print(i)
+
+customersDF.registerTempTable("customers")
+
+sqlContext.setConf("spark.sql.shuffle.partitions", "1")
+
+inactiveCustomersDF=sqlContext.sql("select customer_fname, customer_lname  \
+from customers left outer join orders on customer_id=order_customer_id \
+where order_customer_id is null \
+order by customer_fname, customer_lname")
+
+inactiveCustomersDFToRDD = \
+inactiveCustomersDF.rdd.map(lambda row: row[0]+","+row[1])\
+.saveAsTextFile(path = "/user/nzguy990/solutions/solutions02/inactive_customers")
+
+
+# exercise 3
+# http://discuss.itversity.com/t/exercise-03-get-top-3-crime-types-based-on-number-of-incidents-in-residence-area/7849
+
+crimesRDD = sc.textFile("/public/crime/csv")
+
+from pyspark.sql import Row
+
+# crimesDF = crimesRDD.\
+# map(lambda rec: Row(primaryType=rec.split(",")[5], location_desc=rec.split(",")[7])).toDF()
+
+crimesDF = crimesRDD.\
+map(lambda rec: Row(primaryType=rec.split(",")[5], 
+location_description=rec.split(",")[7])).toDF()
+
+
+for i in crimesDF.take(10): print(i)
+
+crimesDF.registerTempTable("crimes")
+
+sqlContext.setConf("spark.sql.shuffle.partitions", "1")
+
+crimeCountDF=sqlContext.sql("select primaryType, count(1) cnt from crimes \
+where location_description = 'RESIDENCE' \
+group by primaryType order by cnt desc limit 3")
+
+for i in crimeCountDF.take(10): print(i)
+
+crimeCountDF.write.json("/user/nzguy990/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA_1")
+
+
+# exercise 5
+
+ordersRDD = sc.textFile("/user/nzguy990/retail_db/orders")
+
+from pyspark.sql import Row
+
+ordersDF = ordersRDD.\
+map(lambda rec: Row(order_id=int(rec.split(",")[0]), \
+order_date=rec.split(",")[1], \
+order_customer_id=int(rec.split(",")[2]), \ 
+order_status=rec.split(",")[3])).toDF()
+
+for i in ordersDF.take(10): print(i)
+
+ordersDF.registerTempTable("orders")
+
+customersRDD = sc.textFile("/user/nzguy990/retail_db/customers")
+
+customersDF = customersRDD.\
+map(lambda rec: Row(customer_id=int(rec.split(",")[0]), customer_fname=rec.split(",")[1], customer_lname=rec.split(",")[2])).toDF()
+
+for i in customersDF.take(10): print(i)
+
+customersDF.registerTempTable("customers")
+
+sqlContext.setConf("spark.sql.shuffle.partitions", "1")
+
+inactiveCustomersDF=sqlContext.sql("select customer_fname, customer_lname  \
+from customers left outer join orders on customer_id=order_customer_id \
+where order_customer_id is null \
+order by customer_fname, customer_lname")
+
+inactiveCustomersDFToRDD = \
+inactiveCustomersDF.rdd.map(lambda row: row[0]+","+row[1])\
+.saveAsTextFile(path = "/user/nzguy990/solutions/solutions02/inactive_customers")

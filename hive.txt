@@ -1,0 +1,844 @@
+# some tips: https://www.safaribooksonline.com/library/view/programming-hive/9781449326944/ch04.html
+
+ssh nzguy990@gw01.itversity.com
+gahg8voo`keeK8hah6ooHi0ong6naiGh
+
+# spark sql console
+spark-sql --master yarn --conf spark.ui.port=12567
+
+spark-sql 
+
+show databases;
+
+exit;
+
+# hive console
+hive
+
+create database nzguy990_retail_db_txt;
+
+use nzguy990_retail_db_txt;
+
+show tables;
+
+cd /etc/hive/conf
+
+exit;
+
+vi hive-site.xml
+
+set hive.warehouse.dir;
+
+
+# goto hive again
+
+hive
+
+use nzguy990_retail_db_txt;
+
+set hive.metastore.warehouse.dir;
+# hive.metastore.warehouse.dir=/apps/hive/warehouse
+
+
+dfs -ls /apps/hive/warehouse/nzguy990_retail_db_txt.db;
+
+dfs -ls /apps/hive/warehouse; 
+# shows everything
+
+exit; # exit hive
+
+
+ls -ltr /data/retail_db
+
+# 
+drwxr-xr-x 2 root root 4096 Feb 20  2017 customers
+drwxr-xr-x 2 root root 4096 Feb 20  2017 categories
+drwxr-xr-x 2 root root 4096 Feb 20  2017 order_items
+drwxr-xr-x 2 root root 4096 Feb 20  2017 departments
+drwxr-xr-x 2 root root 4096 Feb 20  2017 orders
+drwxr-xr-x 2 root root 4096 Feb 20  2017 products
+
+
+cd /data/retail_db/orders
+
+ls -ltr
+
+#
+-rw-r--r-- 1 root root 2999944 Feb 20  2017 part-00000
+
+
+view part-00000
+
+
+create table orders (
+  order_id int,
+  order_date string,
+  order_customer_id int,
+  order_status string
+) row format delimited fields terminated by ','
+stored as textfile;
+
+
+copy / past /run hive (nzguy990_retail_db_txt)
+
+show tables;
+# orders
+
+
+select * from orders limit 10;
+
+load data local inpath '/data/retail_db/orders' into table orders;
+# appends to data
+# override replaces data
+
+dfs -ls /apps/hive/warehouse/nzguy990_retail_db_txt.db/orders;
+# -rwxrwxrwx   3 nzguy990 hdfs    2999944 2017-12-03 19:21 /apps/hive/warehouse/nzguy990_retail_db_txt.db/orders/part-00000
+
+
+select * from orders limit 10;
+
+# OK
+1	2013-07-25 00:00:00.0	11599	CLOSED
+2	2013-07-25 00:00:00.0	256	PENDING_PAYMENT
+3	2013-07-25 00:00:00.0	12111	COMPLETE
+4	2013-07-25 00:00:00.0	8827	CLOSED
+5	2013-07-25 00:00:00.0	11318	COMPLETE
+6	2013-07-25 00:00:00.0	7130	COMPLETE
+7	2013-07-25 00:00:00.0	4530	COMPLETE
+8	2013-07-25 00:00:00.0	2911	PROCESSING
+9	2013-07-25 00:00:00.0	5657	PENDING_PAYMENT
+10	2013-07-25 00:00:00.0	5648	PENDING_PAYMENT
+Time taken: 1.535 seconds, Fetched: 10 row(s)
+
+
+create table order_items (
+  order_item_id int,
+  order_item_order_id int,
+  order_item_product_id int,
+  order_item_quantity int,
+  order_item_subtotal float,
+  order_item_product_price float
+) row format delimited fields terminated by ','
+stored as textfile;
+
+load data local inpath '/data/retail_db/order_items' into table order_items;
+
+drop table order_items;
+
+# creat orc tables
+create database nzguy990_retail_db_orc;
+
+use nzguy990_retail_db_orc
+
+create table orders (
+  order_id int,
+  order_date string,
+  order_customer_id int,
+  order_status string
+) stored as orc;
+
+insert into table orders select * from nzguy990_retail_db_txt.orders;
+
+create table order_items (
+  order_item_id int,
+  order_item_order_id int,
+  order_item_product_id int,
+  order_item_quantity int,
+  order_item_subtotal float,
+  order_item_product_price float
+) stored as orc;
+
+insert into table order_items select * from nzguy990_retail_db_txt.order_items;
+
+# make sure no records
+select * from orders limit 10;
+select * from order_items limit 10;
+
+describe orders;
+
+# shows path of orders
+describe formatted orders;
+
+# copy/paste path
+dfs -ls hdfs://nn01.itversity.com:8020/apps/hive/warehouse/nzguy990_retail_db_orc/orders;
+
+# section 5/41  running sql/hive cmd using pyspark
+cd
+set -o vi
+
+# launch pyspark
+pyspark --master yarn --conf spark.ui.port=12562 --executor-memory 2G --num-executors 1
+
+# section 5/42
+
+select order_status, length(order_status) from orders limit 100;
+
+# section 5/43 functions - string manipulations
+
+create table customers (
+  customer_id int,
+  customer_fname varchar(45),
+  customer_lname varchar(45),
+  customer_email varchar(45),
+  customer_password varchar(45),
+  customer_street varchar(255),
+  customer_city varchar(45),
+  customer_zipcode varchar(45)
+) row format delimited fields terminated by ','
+stored as textfile;
+
+load data local inpath '/data/retail_db/customers' into table customers;
+
+create database nzguy990_retail_db_orc;
+use nzguy990_retail_db_orc;
+
+# most freq. used string functions
+substr or substring
+instr
+like
+rlike
+length
+lcase or lower
+ucase or upper
+trim, ltrim, rtrim
+lpad, rpad
+concat
+cast
+
+# parms for substr
+describe function substr;
+
+select substr('Hello world, How are you',14);
+# How are you
+
+select substr('Hello world, How are you',7,5);
+# World
+
+select substr('Hello world, How are you',-3);
+# you
+
+select substr('Hello world, How are you',-7,3);
+# are
+
+select substr('Hello world, How are you',' ');
+# 6
+
+select substr('Hello world, How are you','world');
+# 7
+
+select "Hello World, How are you" like 'Hello%';
+# false
+
+select "Hello World, How are you" like 'World%';
+# false
+
+select "Hello World, How are you" like '%World%';
+# true
+
+select a('Hello World, How are you', 14);
+# 
+
+# 5/44 date manipulation
+select current_timestamp;
+# 2017-10-07 20:07:36.44
+
+select date_format(current_date, 'y');
+# 2017
+
+select date_format(current_date, 'd');
+# 7
+
+# day of year
+select date_format(current_date, 'D');
+# 280 
+
+select day(current_date);
+# 7
+
+select dayofmonth(current_date);
+# 7
+
+select day('2017-10-09');
+# 9
+
+select current_date;
+# 2017-10-07
+
+select current_timestamp;
+# 2017-10-07 20:14:37
+
+select to_date(current_timestamp);
+# 2017-10-07
+
+select to_unix_timestamp(current_date);
+# 1507348800
+
+select from_unixtimestamp(1507421802);
+# 2017-10-07 20:16:42
+
+select to_date(from_unixtimestamp(1507421802));
+# 2017-10-07
+
+select * from orders limit 10;
+
+select to_date(order_date) from orders limit 10;
+# 2013-07-25
+# .
+
+# add 10 days to date
+select date_add(order_date, 10) from orders limit 10;
+# 2013-08-04
+
+# 5/45 aggregate functions (min, max, count, sum)
+select count(1) from orders;
+# 68883
+
+select sum(order_item_subtotal) from order_items;
+# 3.4322620598424E17
+
+select count(1), count(distinct order_status) from orders;
+# 68883 9
+
+# 5/46 case and nvl functions\
+# case can use >=, like, in
+# nvl is special type of case function (eg. oracle)
+describe function case;
+
+select distinct order_status from orders;
+
+select orders_status, 
+			case order_status 
+			when 'CLOSED' then 'No Action' 
+            when 'COMPLETE' then 'No Action'
+			when 'ON_HOLD' then 'Pending Action'
+			when 'PAYMENT_REVIEW' then 'Pending Action'
+			when 'PENDING_PAYMENT' then 'Pending Action'
+			else 'Risky'
+			end from orders limit 10;
+
+
+select orders_status, 
+	   case 
+	   		when order_status IN ('CLOSED', 'COMPLETE') then 'No Action'
+	   		when orders_status IN ('ON_HOLD', 'PAYMENT_REVIEW', 'PENDING') then 'Pending Action'
+	   		else 'Risky' 
+			end from orders limit 10;
+
+# 4/47 Row level transformations
+# data standardization - make value in same col. look same eg. ssn
+# cleansing data of bad characters
+
+show functions;
+
+select concat(susbtr(order_date, 1, 4), substr(order_date, 6, 2)) from orders limit 10;
+# 201307
+
+select cast(concat(susbtr(order_date, 1, 4), substr(order_date, 6, 2)) as int)
+from orders;
+# 201307
+
+select date_fromat('2013-07-25 00:00:00.0', 'YYYYMM');
+# 201307
+
+
+# 4/48 joining data bet. tables, aliases too eg. o c
+select o.*, c.* from orders o, customers c 
+where o.order_customer_id = c.customer_id
+limit 10;
+
+# means inner join too
+select o.*, c.* from orders o join customers c 
+on o.order_customer_id=c.customer_id
+limit 10;
+
+select o.*, c.* from orders o inner join customers c 
+on o.order_customer_id=c.customer_id
+limit 10;
+
+select o.*, c.* from orders o left outer join customers c 
+on o.order_customer_id=c.customer_id
+limit 10;
+
+select count(1) from orders o inner join customers c 
+on o.order_customer_id=c.customer_id
+
+# customers without orders, 1 job:
+select count(1) from orders o left outer join customers c 
+on o.order_customer_id=c.customer_id
+where o.order_customer_id is null;
+# 68993
+
+# another way customers without orders. 
+# IN bit slow, take 7 jobs. nested queries only recently supported by hive
+select * from customers where customer_id not in (select distinct order_customer_id from orders);
+
+# 4/49 group by and aggregations
+select order_status, count(1) from orders group by order_status;
+
+# revenue each order id
+select o.order_id, sum(oi.order_item_subtotal) order_revenue
+from orders o join order_items oi
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')
+group by o.order_id
+having sum(oi.order_item_subtotal) >= 1000;
+
+
+# revenue per date, round = 2 dec
+select o.order_date, round(sum(oi.order_item_subtotal), 2) daily_revenue
+from orders o join order_items oi
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')
+group by o.order_date;
+
+
+# 5/50 sorting data
+
+# sort by date ascend, revenue desc
+select o.order_id, o.order_date, o.order_status, sum(oi.order_item_subtotal) order_revenue
+from orders o join order_items oi
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000;
+order by o.order_date, order_revenue desc
+
+
+# distribute by + sort by (not important for certification), scales much better than order by
+select o.order_id, o.order_date, o.order_status, sum(oi.order_item_subtotal) order_revenue
+from orders o join order_items oi
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000;
+distribute by o.order_date sort by o.order_date, order_revenue desc
+
+
+# 5/51 set operations - union (distinct rows only) and union all (everything)
+select 2, "World";
+select 1, "Hello";
+select 1, "world";
+
+# all records, return 4 records
+select 1, "Hello"
+union all
+select 2, "World"
+union all
+select 1, "Hello"
+union all
+select 1, "world";
+
+# eliminate dups (distinct), return 3 records
+select 1, "Hello"
+union 
+select 2, "World"
+union 
+select 1, "Hello"
+union 
+select 1, "world";
+
+
+# 5/52 analytics functions - aggregations IMPORTANT, google hive language manual
+
+select * from (
+select o.order_id, o.order_date, o.order_status, oi.order_item_subtotal,
+round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) order_revenue,
+oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) * 100 pct_revenue,
+round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue
+from orders o join order_items oi 
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')) q
+where order_revenue >= 1000
+order by order_date, order_revenue desc;
+
+
+# 5/53 analytic functions IMPORTANT eg. RANK
+
+select * from (
+select o.order_id, o.order_date, o.order_status, oi.order_item_subtotal,
+round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) order_revenue,
+oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) * 100 pct_revenue,
+round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue,
+rank() over (partition by o.order_id order by oi.order_item_subtotal desc) rnk_revenue,
+dense_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) dense_rnk_revenue,
+percent_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) pct_rnk_revenue,
+row_number() over (partition by o.order_id order by oi.order_item_subtotal desc) rn_orderby_revenue,
+row_number() over (partition by o.order_id) rn_revenue
+from orders o join order_items oi 
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')) q
+where order_revenue >= 1000
+order by order_date, order_revenue desc, rnk_revenue;
+
+
+#
+67410	2014-07-24 00:00:00.0	COMPLETE	399.98	1019.94	39.216033392780766	203.99	1	1	0.0	1	2
+67410	2014-07-24 00:00:00.0	COMPLETE	199.99	1019.94	19.608016696390383	203.99	2	2	0.25	3	1
+67410	2014-07-24 00:00:00.0	COMPLETE	199.99	1019.94	19.608016696390383	203.99	2	2	0.25	2	4
+67410	2014-07-24 00:00:00.0	COMPLETE	159.99	1019.94	15.686217374861663	203.99	4	3	0.75	4	5
+67410	2014-07-24 00:00:00.0	COMPLETE	59.99	1019.94	5.881718697027942	203.99	5	4	1.0	5	3
+
+57627	2014-07-24 00:00:00.0	COMPLETE	250.0	1017.9	24.560369387955596	203.58	1	1	0.0	1	3
+57627	2014-07-24 00:00:00.0	COMPLETE	239.96	1017.9	23.57402561291553	203.58	2	2	0.25	2	1
+57627	2014-07-24 00:00:00.0	COMPLETE	200.0	1017.9	19.648295510364477	203.58	3	3	0.5	3	4
+57627	2014-07-24 00:00:00.0	COMPLETE	199.98	1017.9	19.646330261080564	203.58	4	4	0.75	4	2
+57627	2014-07-24 00:00:00.0	COMPLETE	127.96	1017.9	12.570979377588435	203.58	5	5	1.0	5	5
+57690	2014-07-24 00:00:00.0	CLOSED	399.98	1009.93	39.604726167786694	201.99	1	1	0.0	1	3
+57690	2014-07-24 00:00:00.0	CLOSED	200.0	1009.93	19.8033527076134	201.99	2	2	0.25	2	2
+57690	2014-07-24 00:00:00.0	CLOSED	199.98	1009.93	19.801371949297383	201.99	3	3	0.5	3	5
+57690	2014-07-24 00:00:00.0	CLOSED	129.99	1009.93	12.871189636228655	201.99	4	4	0.75	4	4
+57690	2014-07-24 00:00:00.0	CLOSED	79.98	1009.93	7.919361080167299	201.99	5	5	1.0	5	1
+
+
+# 5/54 windowing functions IMPORTANT
+
+select * from (
+select o.order_id, o.order_date, o.order_status, oi.order_item_subtotal,
+round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) order_revenue,
+oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) * 100 pct_revenue,
+round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue,
+rank() over (partition by o.order_id order by oi.order_item_subtotal desc) rnk_revenue,
+dense_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) dense_rnk_revenue,
+percent_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) pct_rnk_revenue,
+row_number() over (partition by o.order_id order by oi.order_item_subtotal desc) rn_orderby_revenue,
+row_number() over (partition by o.order_id) rn_revenue,
+lead(oi.order_item_subtotal) over (partition by o.order_id order by oi.order_item_subtotal desc) lead_order_item_subtotal, 
+lag(oi.order_item_subtotal) over (partition by o.order_id order by oi.order_item_subtotal desc) lag_order_item_subtotal,
+first_value(oi.order_item_subtotal) over (partition by o.order_id order by oi.order_item_subtotal desc) first_order_item_subtotal, 
+last_value(oi.order_item_subtotal) over (partition by o.order_id order by oi.order_item_subtotal desc) last_order_item_subtotal
+from orders o join order_items oi 
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')) q
+where order_revenue >= 1000
+order by order_date, order_revenue desc, rnk_revenue;
+
+#
+57627	2014-07-24 00:00:00.0	COMPLETE	250.0	1017.9	24.560369387955596	203.58	1	1	0.0	1	3	239.96	NULL	250.0	250.0
+57627	2014-07-24 00:00:00.0	COMPLETE	239.96	1017.9	23.57402561291553	203.58	2	2	0.25	2	1	200.0	250.0	250.0	239.96
+57627	2014-07-24 00:00:00.0	COMPLETE	200.0	1017.9	19.648295510364477	203.58	3	3	0.5	3	4	199.98	239.96	250.0	200.0
+57627	2014-07-24 00:00:00.0	COMPLETE	199.98	1017.9	19.646330261080564	203.58	4	4	0.75	4	2	127.96	200.0	250.0	199.98
+57627	2014-07-24 00:00:00.0	COMPLETE	127.96	1017.9	12.570979377588435	203.58	5	5	1.0	5	5	NULL	199.98	250.0	127.96
+
+57690	2014-07-24 00:00:00.0	CLOSED	399.98	1009.93	39.604726167786694	201.99	1	1	0.0	1	3	200.0	NULL	399.98	399.98
+57690	2014-07-24 00:00:00.0	CLOSED	200.0	1009.93	19.8033527076134	201.99	2	2	0.25	2	2	199.98	399.98	399.98	200.0
+57690	2014-07-24 00:00:00.0	CLOSED	199.98	1009.93	19.801371949297383	201.99	3	3	0.5	3	5	129.99	200.0	399.98	199.98
+57690	2014-07-24 00:00:00.0	CLOSED	129.99	1009.93	12.871189636228655	201.99	4	4	0.75	4	4	79.98	199.98	399.98	129.99
+57690	2014-07-24 00:00:00.0	CLOSED	79.98	1009.93	7.919361080167299	201.99	5	5	1.0	5	1	NULL	129.99	399.98	79.98
+
+# 5/55 creating data frames and register IMPORTANT ! 55.1 to 55.6
+pyspark --master yarn --conf spark.ui.port=12562 --executor-memory 2G --num-executors 1
+from pyspark.sql import Row
+ordersRDD = sc.textFile("/public/retail_db/orders")
+ordersDF = ordersRDD.\
+map(lambda o: Row(order_id=int(o.split(",")[0]), order_date=o.split(",")[1], order_customer_id=int(o.split(",")[2]), order_status=o.split(",")[3])).toDF()
+ordersDF.registerTempTable("ordersDF_table")
+sqlContext.sql("select order_status, count(1) from ordersDF_table group by order_status").show()
+
+productsRaw = open("/data/retail_db/products/part-00000").read().splitlines()
+productsRDD = sc.parallelize(productsRaw)
+productsDF = productsRDD.\
+map(lambda p: Row(product_id=int(p.split(",")[0]), product_name=p.split(",")[2])).\
+toDF()
+productsDF.registerTempTable("products")
+
+
+# 5.51
+pyspark --master yarn --conf spark.ui.port=12562 --executor-memory 2G --num-executors 1
+
+#
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /__ / .__/\_,_/_/ /_/\_\   version 1.6.2
+      /_/
+
+Using Python version 2.7.5 (default, Sep 15 2016 22:37:39)
+SparkContext available as sc, HiveContext available as sqlContext.
+>>> 
+
+sqlContext.sql("select * from nzguy990_retail_db_orc.orders").show();
+
+#
++--------+--------------------+-----------------+---------------+
+|order_id|          order_date|order_customer_id|   order_status|
++--------+--------------------+-----------------+---------------+
+|       1|2013-07-25 00:00:...|            11599|         CLOSED|
+|       2|2013-07-25 00:00:...|              256|PENDING_PAYMENT|
+|       3|2013-07-25 00:00:...|            12111|       COMPLETE|
+|       4|2013-07-25 00:00:...|             8827|         CLOSED|
+|       5|2013-07-25 00:00:...|            11318|       COMPLETE|
+|       6|2013-07-25 00:00:...|             7130|       COMPLETE|
+|       7|2013-07-25 00:00:...|             4530|       COMPLETE|
+|       8|2013-07-25 00:00:...|             2911|     PROCESSING|
+|       9|2013-07-25 00:00:...|             5657|PENDING_PAYMENT|
+|      10|2013-07-25 00:00:...|             5648|PENDING_PAYMENT|
+|      11|2013-07-25 00:00:...|              918| PAYMENT_REVIEW|
+|      12|2013-07-25 00:00:...|             1837|         CLOSED|
+|      13|2013-07-25 00:00:...|             9149|PENDING_PAYMENT|
+|      14|2013-07-25 00:00:...|             9842|     PROCESSING|
+|      15|2013-07-25 00:00:...|             2568|       COMPLETE|
+|      16|2013-07-25 00:00:...|             7276|PENDING_PAYMENT|
+|      17|2013-07-25 00:00:...|             2667|       COMPLETE|
+|      18|2013-07-25 00:00:...|             1205|         CLOSED|
+|      19|2013-07-25 00:00:...|             9488|PENDING_PAYMENT|
+|      20|2013-07-25 00:00:...|             9198|     PROCESSING|
++--------+--------------------+-----------------+---------------+
+only showing top 20 rows
+
+sqlContext.sql("select * from nzguy990_retail_db_orc.orders").printSchema();
+
+#
+17/12/10 11:42:01 INFO ParseDriver: Parsing command: select * from nzguy990_retail_db_orc.orders
+17/12/10 11:42:01 INFO ParseDriver: Parse Completed
+17/12/10 11:42:01 INFO OrcRelation: Listing hdfs://nn01.itversity.com:8020/apps/hive/warehouse/nzguy990_retail_db_orc.db/orders on driver
+root
+ |-- order_id: integer (nullable = true)
+ |-- order_date: string (nullable = true)
+ |-- order_customer_id: integer (nullable = true)
+ |-- order_status: string (nullable = true)
+
+
+# 55.2 to read data from hdfs, import package called Row
+from pyspark.sql import Row;
+
+# 55.3
+ordersRDD = sc.textFile("/public/retail_db/orders");
+
+for i in ordersRDD.take(10): print(i);
+
+#
+1,2013-07-25 00:00:00.0,11599,CLOSED
+2,2013-07-25 00:00:00.0,256,PENDING_PAYMENT
+3,2013-07-25 00:00:00.0,12111,COMPLETE
+4,2013-07-25 00:00:00.0,8827,CLOSED
+5,2013-07-25 00:00:00.0,11318,COMPLETE
+6,2013-07-25 00:00:00.0,7130,COMPLETE
+7,2013-07-25 00:00:00.0,4530,COMPLETE
+8,2013-07-25 00:00:00.0,2911,PROCESSING
+9,2013-07-25 00:00:00.0,5657,PENDING_PAYMENT
+10,2013-07-25 00:00:00.0,5648,PENDING_PAYMENT
+
+type(ordersRDD);
+# <class 'pyspark.rdd.RDD'>
+
+type(ordersRDD.first);
+# <type 'instancemethod'>
+
+# rdd has no structure, dataframe has structure
+ordersDF = ordersRDD.map(lambda o: Row(int(o.split(",")[0]), o.split(",")[1], int(o.split(",")[2]), o.split(",")[3])).toDF();
+
+ordersDF.show();
+
+# column names _1,_2,_3,_4
++---+--------------------+-----+---------------+
+| _1|                  _2|   _3|             _4|
++---+--------------------+-----+---------------+
+|  1|2013-07-25 00:00:...|11599|         CLOSED|
+|  2|2013-07-25 00:00:...|  256|PENDING_PAYMENT|
+|  3|2013-07-25 00:00:...|12111|       COMPLETE|
+|  4|2013-07-25 00:00:...| 8827|         CLOSED|
+|  5|2013-07-25 00:00:...|11318|       COMPLETE|
+|  6|2013-07-25 00:00:...| 7130|       COMPLETE|
+|  7|2013-07-25 00:00:...| 4530|       COMPLETE|
+|  8|2013-07-25 00:00:...| 2911|     PROCESSING|
+|  9|2013-07-25 00:00:...| 5657|PENDING_PAYMENT|
+| 10|2013-07-25 00:00:...| 5648|PENDING_PAYMENT|
+| 11|2013-07-25 00:00:...|  918| PAYMENT_REVIEW|
+| 12|2013-07-25 00:00:...| 1837|         CLOSED|
+| 13|2013-07-25 00:00:...| 9149|PENDING_PAYMENT|
+| 14|2013-07-25 00:00:...| 9842|     PROCESSING|
+| 15|2013-07-25 00:00:...| 2568|       COMPLETE|
+| 16|2013-07-25 00:00:...| 7276|PENDING_PAYMENT|
+| 17|2013-07-25 00:00:...| 2667|       COMPLETE|
+| 18|2013-07-25 00:00:...| 1205|         CLOSED|
+| 19|2013-07-25 00:00:...| 9488|PENDING_PAYMENT|
+| 20|2013-07-25 00:00:...| 9198|     PROCESSING|
++---+--------------------+-----+---------------+
+only showing top 20 rows
+
+# 55.4 give each column a name
+ordersDF = ordersRDD.map(lambda o: Row(\
+order_id=int(o.split(",")[0]), order_date=o.split(",")[1],\
+order_customer_id=int(o.split(",")[2]), order_status=o.split(",")[3])).\
+toDF();
+
+ordersDF.show();
+#
++-----------------+--------------------+--------+---------------+
+|order_customer_id|          order_date|order_id|   order_status|
++-----------------+--------------------+--------+---------------+
+|            11599|2013-07-25 00:00:...|       1|         CLOSED|
+|              256|2013-07-25 00:00:...|       2|PENDING_PAYMENT|
+|            12111|2013-07-25 00:00:...|       3|       COMPLETE|
+|             8827|2013-07-25 00:00:...|       4|         CLOSED|
+|            11318|2013-07-25 00:00:...|       5|       COMPLETE|
+|             7130|2013-07-25 00:00:...|       6|       COMPLETE|
+|             4530|2013-07-25 00:00:...|       7|       COMPLETE|
+|             2911|2013-07-25 00:00:...|       8|     PROCESSING|
+|             5657|2013-07-25 00:00:...|       9|PENDING_PAYMENT|
+|             5648|2013-07-25 00:00:...|      10|PENDING_PAYMENT|
+|              918|2013-07-25 00:00:...|      11| PAYMENT_REVIEW|
+|             1837|2013-07-25 00:00:...|      12|         CLOSED|
+|             9149|2013-07-25 00:00:...|      13|PENDING_PAYMENT|
+|             9842|2013-07-25 00:00:...|      14|     PROCESSING|
+|             2568|2013-07-25 00:00:...|      15|       COMPLETE|
+|             7276|2013-07-25 00:00:...|      16|PENDING_PAYMENT|
+|             2667|2013-07-25 00:00:...|      17|       COMPLETE|
+|             1205|2013-07-25 00:00:...|      18|         CLOSED|
+|             9488|2013-07-25 00:00:...|      19|PENDING_PAYMENT|
+|             9198|2013-07-25 00:00:...|      20|     PROCESSING|
++-----------------+--------------------+--------+---------------+
+only showing top 20 rows
+
+# 55.5 create dataframe
+ordersDF.registerTempTable("ordersDF_table");
+sqlContext.sql("select * from ordersDF_table").show();
+
+# 55.6 run sql
+sqlContext.sql("select order_status, count(1) from ordersDF_table group by order_status").show();
+
+#
++---------------+-----+
+|   order_status|  _c1|
++---------------+-----+
+|        PENDING| 7610|
+|        ON_HOLD| 3798|
+| PAYMENT_REVIEW|  729|
+|PENDING_PAYMENT|15030|
+|     PROCESSING| 8275|
+|         CLOSED| 7556|
+|       COMPLETE|22899|
+|       CANCELED| 1428|
+|SUSPECTED_FRAUD| 1558|
++---------------+-----+
+
+productsRaw = open("/data/retail_db/products/part-00000").read().splitlines()
+productsRDD = sc.parallelize(productsRaw)
+
+productsDF = productsRDD.\
+map(lambda p: Row(product_id=int(p.split(",")[0]), product_name=p.split(",")[2])).\
+toDF()
+
+productsDF.show()
+
+# 5/56 write spark application - processing data using spark sql
+
+pyspark --master yarn --conf spark.ui.port=12562 --executor-memory 2G --num-executors 1
+
+from pyspark.sql import Row
+ordersRDD = sc.textFile("/public/retail_db/orders")
+ordersDF = ordersRDD.\
+map(lambda o: Row(order_id=int(o.split(",")[0]), order_date=o.split(",")[1], order_customer_id=int(o.split(",")[2]), order_status=o.split(",")[3])).toDF()
+
+ordersDF.registerTempTable("ordersDF_table")
+
+sqlContext.sql("select order_status, count(1) from ordersDF_table group by order_status").show()
+
+# create products tempTable
+productsRaw = open("/data/retail_db/products/part-00000").read().splitlines() # list
+productsRDD = sc.parallelize(productsRaw)
+productsDF = productsRDD.\
+map(lambda p: Row(product_id=int(p.split(",")[0]), product_name=p.split(",")[2])).\
+toDF()
+productsDF.registerTempTable("products")
+
+sqlContext.sql("use nzguy990_retail_db_txt")
+sqlContext.sql("show tables").show()
+
+#
++--------------+-----------+
+|     tableName|isTemporary|
++--------------+-----------+
+|ordersdf_table|       true|
+|      products|       true|
+|     customers|      false|
+|   order_items|      false|
+|        orders|      false|
++--------------+-----------+
+
+sqlContext.sql("select * from products").show()
+sqlContext.sql("select * from orders").show()
+sqlContext.sql("select * from order_items").show()
+
+# if wanna reduce # of tasks to 2
+sqlContext.setConf("spark.sql.shuffle.partitions", "2")
+sqlContext.sql("select o.order_date, p.product_name, sum(oi.order_item_subtotal) daily_revenue_per_product \
+from orders o join order_items oi \
+on o.order_id = oi.order_item_order_id \
+join products p \
+on p.product_id = oi.order_item_product_id \
+where o.order_status in ('COMPLETE','CLOSED') \
+group by o.order_date, p.product_name \
+order by o.order_date, daily_revenue_per_product desc").show()
+
+
+# 5/57 write spark application - saving data frame to tables
+
+sqlContext.sql("CREATE DATABASE nzguy990_daily_revenue");
+sqlContext.sql("CREATE TABLE nzguy990_daily_revenue.daily_revenue (order_date string, product_name string, daily_revenue_per_product float) STORED AS orc");
+
+daily_revenue_per_product_df = sqlContext.sql("select o.order_date, p.product_name, sum(oi.order_item_subtotal) daily_revenue_per_product \
+from orders o join order_items oi \
+on o.order_id = oi.order_item_order_id \
+join products p \
+on p.product_id = oi.order_item_product_id \
+where o.order_status in ('COMPLETE','CLOSED') \
+group by o.order_date, p.product_name \
+order by o.order_date, daily_revenue_per_product desc")
+
+help(daily_revenue_per_product_df)
+daily_revenue_per_product_df.insertInto("nzguy990_daily_revenue.daily_revenue")
+sqlContext.sql("select * from nzguy990_daily_revenue.daily_revenue").show(50)
+
+# 5/58 data frame operations
+
+help(daily_revenue_per_product_df)
+help(daily_revenue_per_product_df.write)
+
+daily_revenue_per_product_df.printSchema
+
+daily_revenue_per_product_df.saveAsTable
+# or
+daily_revenue_per_product_df.insertInto("nzguy990_daily_revenue.daily_revenue")
+
+daily_revenue_per_product_df.show(100)
+daily_revenue_per_product_df.save("/user/nzguy990/daily_revenue_save", "json")
+daily_revenue_per_product_df.write.json("/user/nzguy990/daily_revenue_write")
+
+daily_revenue_per_product_df.select("order_date","daily_revenue_per_product").show()
+daily_revenue_per_product_df.filter(daily_revenue_per_product_df["order_date"] == "2013-07-25 00:00:00.0").show(5)
+#
++--------------------+--------------------+-------------------------+
+|          order_date|        product_name|daily_revenue_per_product|
++--------------------+--------------------+-------------------------+
+|2013-07-25 00:00:...|Field & Stream Sp...|        5599.720153808594|
+|2013-07-25 00:00:...|Nike Men's Free 5...|        5099.490051269531|
+|2013-07-25 00:00:...|Diamondback Women...|        4499.700164794922|
+|2013-07-25 00:00:...|Perfect Fitness P...|       3359.4401054382324|
+|2013-07-25 00:00:...|Pelican Sunstream...|        2999.850082397461|
++--------------------+--------------------+-------------------------+
+only showing top 5 rows
+
+exit()
+
+
+#bash console
+
+hadoop fs -ls /user/nzguy990/daily_revenue_save
+# /user/nzguy990/daily_revenue_save/part-r-00199-0d46603a-8785-4d54-b2c0-69beb1e6876f
+
+hadoop fs -ls /user/nzguy990/daily_revenue_write
+
+hadoop fs -tail /user/nzguy990/daily_revenue_save/part-r-00199-0d46603a-8785-4d54-b2c0-69beb1e6876f
+#
+It Women's Mod Oval Golf Glove","daily_revenue_per_product":59.96999931335449}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Glove It Women's Mod Oval 3-Zip Carry All Gol","daily_revenue_per_product":43.97999954223633}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Top Flite Women's 2014 XL Hybrid","daily_revenue_per_product":39.97999954223633}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Hirzl Women's Soffft Flex Golf Glove","daily_revenue_per_product":35.97999954223633}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Glove It Imperial Golf Towel","daily_revenue_per_product":31.979999542236328}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Nike Women's Tempo Shorts","daily_revenue_per_product":30.0}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Team Golf Texas Longhorns Putter Grip","daily_revenue_per_product":24.989999771118164}
+{"order_date":"2014-07-24 00:00:00.0","product_name":"Hirzl Women's Hybrid Golf Glove","daily_revenue_per_product":14.989999771118164}
+
+

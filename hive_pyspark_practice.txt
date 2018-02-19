@@ -1,0 +1,121 @@
+orders table
+
+order_id            	int                 	                    
+order_date          	string              	                    
+order_customer_id   	int                 	                    
+order_status        	string 
+
+
+order_items table
+
+order_item_id       	int                 	                    
+order_item_order_id 	int                 	                    
+order_item_product_id	int                 	                    
+order_item_quantity 	int                 	                    
+order_item_subtotal 	float               	                    
+order_item_product_price	float  
+
+
+customers table
+
+customer_id         	int                 	                    
+customer_fname      	varchar(45)         	                    
+customer_lname      	varchar(45)         	                    
+customer_email      	varchar(45)         	                    
+customer_password   	varchar(45)         	                    
+customer_street     	varchar(255)        	                    
+customer_city       	varchar(45)         	                    
+customer_zipcode    	varchar(45)         
+
+# hive practice
+
+select o.order_id, o.order_date, o.order_status, oi.order_item_subtotal,
+round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) order_revenue,
+oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) * 100 pct_revenue,
+round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue
+from orders o join order_items oi 
+on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE','CLOSED')
+limit 100;
+
+select order_id, order_item_subtotal,
+sum(oi.order_item_subtotal) over (partition by o.order_id) order_revenue,
+round(oi.order_item_subtotal/(sum(oi.order_item_subtotal) over (partition by o.order_id)),2) * 100 pct_revenue,
+avg(oi.order_item_subtotal) over (partition by o.order_id) avg_revenue,
+dense_rank() over (partition by o.order_id order by order_item_subtotal) dense_rank_order_item_subtotal 
+from orders o join order_items oi
+on order_id=order_item_order_id;
+
+
+# pyspark practice - run same query in pyspark
+
+pyspark --master yarn --conf spark.ui.port=12562 --executor-memory 2G --num-executors 1
+
+from pyspark.sql import Row
+
+sqlContext.sql("use nzguy990_retail_db_txt")
+
+sqlContext.sql("show tables").show()
+
+sqlContext.sql("select order_id, order_item_subtotal, \
+sum(oi.order_item_subtotal) over (partition by o.order_id) order_revenue, \
+round(oi.order_item_subtotal/(sum(oi.order_item_subtotal) over (partition by o.order_id)),2) * 100 pct_revenue, \
+avg(oi.order_item_subtotal) over (partition by o.order_id) avg_revenue, \
+dense_rank() over (partition by o.order_id order by order_item_subtotal) rnk_order_item_subtotal \
+from orders o join order_items oi \
+on order_id=order_item_order_id \
+").show(10) 
+
+# create practice db
+sqlContext.sql("CREATE DATABASE nzguy990_practice")
+
+rank_order_items_workfile_df = \
+sqlContext.sql("select order_id, order_item_subtotal, \
+sum(oi.order_item_subtotal) over (partition by o.order_id) order_revenue, \
+round(oi.order_item_subtotal/(sum(oi.order_item_subtotal) over (partition by o.order_id)),2) * 100 pct_revenue, \
+avg(oi.order_item_subtotal) over (partition by o.order_id) avg_revenue, \
+dense_rank() over (partition by o.order_id order by order_item_subtotal) rnk_order_item_subtotal \
+from orders o join order_items oi \
+on order_id=order_item_order_id \
+")
+
+type(rank_order_items_workfile)
+<class 'pyspark.sql.dataframe.DataFrame'>
+
+sqlContext.sql("use nzguy990_practice")
+
+sqlContext.sql("create table rank_order_items_workfile ( \
+order_id int, \
+order_item_subtotal float, \
+order_revenue float, \
+pct_revenue float, \
+avg_revenue float, \
+rnk_order_item_subtotal int \
+)")
+
+rank_order_items_workfile_df.insertInto("nzguy990_practice.rank_order_items_workfile")
+
+sqlContext.sql("select * from rank_order_items_workfile order by order_id, rnk_order_item_subtotal").show(10)
+
+#
++--------+-------------------+-------------+-----------+-----------+-----------------------+
+|order_id|order_item_subtotal|order_revenue|pct_revenue|avg_revenue|rnk_order_item_subtotal|
++--------+-------------------+-------------+-----------+-----------+-----------------------+
+|       1|             299.98|       299.98|      100.0|     299.98|                      1|
+|       2|             129.99|       579.98|       22.0|  193.32668|                      1|
+|       2|             199.99|       579.98|       34.0|  193.32668|                      2|
+|       2|              250.0|       579.98|       43.0|  193.32668|                      3|
+|       4|              49.98|    699.85004|        7.0|  174.96251|                      1|
+|       4|              150.0|    699.85004|       21.0|  174.96251|                      2|
+|       4|             199.92|    699.85004|       29.0|  174.96251|                      3|
+|       4|             299.95|    699.85004|       43.0|  174.96251|                      4|
+|       5|              99.96|      1129.86|        9.0|  225.97202|                      1|
+|       5|             129.99|      1129.86|       12.0|  225.97202|                      2|
++--------+-------------------+-------------+-----------+-----------+-----------------------+
+only showing top 10 rows
+
+rank_order_items_workfile_df.save("/user/nzguy990/rank_order_items_workfile_save", "json")
+
+exit();
+
+hadoop fs -ls /user/nzguy990/daily_revenue_write
